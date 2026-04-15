@@ -11,6 +11,7 @@ import (
 )
 
 func TestVersionCommand(t *testing.T) {
+	resetFlags()
 	buf := new(bytes.Buffer)
 	rootCmd.SetOut(buf)
 	rootCmd.SetArgs([]string{"version"})
@@ -20,6 +21,7 @@ func TestVersionCommand(t *testing.T) {
 }
 
 func TestCheckCommandWithValidConfig(t *testing.T) {
+	resetFlags()
 	dir := t.TempDir()
 	cfgPath := filepath.Join(dir, ".pregorc.yml")
 
@@ -36,6 +38,7 @@ func TestCheckCommandWithValidConfig(t *testing.T) {
 }
 
 func TestCheckCommandWithInvalidConfig(t *testing.T) {
+	resetFlags()
 	dir := t.TempDir()
 	cfgPath := filepath.Join(dir, ".pregorc.yml")
 
@@ -49,6 +52,7 @@ func TestCheckCommandWithInvalidConfig(t *testing.T) {
 }
 
 func TestCheckCommandMissingFile(t *testing.T) {
+	resetFlags()
 	rootCmd.SetArgs([]string{"-c", "/nonexistent/.pregorc.yml", "check"})
 	err := rootCmd.Execute()
 	assert.Error(t, err)
