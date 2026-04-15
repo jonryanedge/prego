@@ -10,7 +10,30 @@ DESTDIR    ?= /usr/local/bin
 LINT_BIN   := $(shell command -v golangci-lint 2>/dev/null)
 COVERAGE   := coverage.out
 
-.PHONY: all build install clean test lint coverage vet fmt run cross-build dist-clean
+.PHONY: all build install clean test lint coverage vet fmt run cross-build dist-clean help
+
+help:
+	@echo "$(BINARY) v$(VERSION) ($(BUILD))"
+	@echo ""
+	@echo "Usage: make <target>"
+	@echo ""
+	@echo "Targets:"
+	@echo "  all          lint, test, and build (default)"
+	@echo "  build        compile binary to bin/"
+	@echo "  install      build and copy to DESTDIR (default: /usr/local/bin)"
+	@echo "  run          build and run the binary"
+	@echo "  test         run all tests with race detector"
+	@echo "  test-short   run tests in short mode"
+	@echo "  coverage     generate HTML coverage report"
+	@echo "  vet          run go vet"
+	@echo "  lint         run go vet and golangci-lint"
+	@echo "  fmt          run gofmt and goimports"
+	@echo "  tidy         run go mod tidy"
+	@echo "  cross-build  cross-compile for darwin/linux amd64/arm64"
+	@echo "  version      print version info"
+	@echo "  clean        remove bin/ and coverage files"
+	@echo "  dist-clean   clean + purge Go build/test caches"
+	@echo "  help          show this help menu"
 
 all: lint test build
 
