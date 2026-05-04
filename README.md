@@ -35,18 +35,37 @@ prego version
 
 ## Config File
 
-Prego reads `~/.pregorc.yml` by default. Override with `-c` on any command.
+Prego reads `~/.pregorc.yml` as the system config and `.pregorc.yml` in the current directory as a local config. The local config overrides the system config (entries with the same path are replaced, hooks are appended). If neither exists, prego uses sensible defaults. Override the system config path with `-c` on any command.
+
+### `prego init`
+
+Create a config file with default values:
+
+```bash
+prego init                    # create ~/.pregorc.yml (system config)
+prego init --local            # create .pregorc.yml in current directory
+prego init -c ~/my-config.yml # create config at custom path
+```
 
 ### Sample Config
 
 ```yaml
-version: 1
+version: 2
 
-machine:
-  name: work-laptop
-  os: darwin
+general:
+  color: true
+  verbose: false
 
-dirs:
+system:
+  machine:
+    name: work-laptop
+    os: darwin
+  hooks:
+    post_create:
+      - "chmod 700 ~/.ssh"
+      - "chmod 700 ~/.gnupg"
+
+directory:
   core:
     root: "~"
     entries:
@@ -97,17 +116,34 @@ hooks:
 
 | Field | Type | Required | Description |
 |---|---|---|---|
-| `version` | int | yes | Config schema version (currently `1`) |
-| `machine.name` | string | no | Human-readable machine identifier |
-| `machine.os` | string | no | `darwin`, `linux`, `windows` |
-| `dirs.<category>.root` | string | yes | Base path for the category |
-| `dirs.<category>.entries[]` | list | yes | Directory entries |
-| `dirs.<category>.entries[].path` | string | yes | Absolute or `~/`-relative path |
-| `dirs.<category>.entries[].mode` | octal | no | Unix permissions (default `0755`) |
-| `dirs.<category>.entries[].vcs` | string | no | VCS type, e.g. `git` (auto-detected by scan) |
-| `dirs.<category>.entries[].remote` | string | no | Actual remote URL (e.g. `https://github.com/user/repo.git`) |
-| `dirs.<category>.symlinks[]` | list | no | Symlink declarations (core only) |
-| `hooks.post_create` | list | no | Shell commands to run after creation |
+| `version` | int | yes | Config schema version (currently `2`) |
+| `general.color` | bool | no | Enable colored output (default: true) |
+| `general.verbose` | bool | no | Verbose output (default: false) |
+| `system.machine.name` | string | no | Human-readable machine identifier |
+| `system.machine.os` | string | no | `darwin`, `linux`, `windows` |
+| `system.hooks.post_create` | list | no | Shell commands to run after creation / build |
+| `directory.<category>.root` | string | yes | Base path for the category |
+| `directory.<category>.entries[]` | list | yes | Directory entries |
+| `directory.<category>.entries[].path` | string | yes | Absolute or `~/`-relative path |
+| `directory.<category>.entries[].mode` | octal | no | Unix permissions (default `0755`) |
+| `directory.<category>.entries[].vcs` | string | no | VCS type, e.g. `git` (auto-detected by scan) |
+| `directory.<category>.entries[].remote` | string | no | Actual remote URL (e.g. `https://github.com/user/repo.git`) |
+| `directory.<category>.symlinks[]` | list | no | Symlink declarations (core only) |
+
+### Config Hierarchy
+
+Prego loads configs in this order (later overrides earlier):
+
+1. **System config**: `~/.pregorc.yml` (or path specified by `-c`)
+2. **Local config**: `.pregorc.yml` in the current directory
+
+When merging:
+- `general` settings: local overrides system
+- `system.machine`: local overrides system
+- `system.hooks.post_create`: local appends to system
+- `directory`: categories merge; entries with the same path are overridden by local
+
+If no config files exist, prego uses sensible defaults and works without error.
 
 ### Categories
 

@@ -38,7 +38,8 @@ func setupTestDir(t *testing.T) string {
 func testConfig(dir string) *config.Config {
 	return &config.Config{
 		Version: config.Version,
-		Dirs: map[string]config.DirCategory{
+		System:  config.System{Hooks: config.Hooks{}},
+		Directory: map[string]config.DirCategory{
 			"core": {
 				Root: dir,
 				Entries: []config.DirEntry{
@@ -59,7 +60,8 @@ func TestDiffMissingDir(t *testing.T) {
 	dir := t.TempDir()
 	cfg := &config.Config{
 		Version: config.Version,
-		Dirs: map[string]config.DirCategory{
+		System:  config.System{Hooks: config.Hooks{}},
+		Directory: map[string]config.DirCategory{
 			"core": {
 				Root: dir,
 				Entries: []config.DirEntry{
@@ -87,7 +89,8 @@ func TestDiffModeMismatch(t *testing.T) {
 
 	cfg := &config.Config{
 		Version: config.Version,
-		Dirs: map[string]config.DirCategory{
+		System:  config.System{Hooks: config.Hooks{}},
+		Directory: map[string]config.DirCategory{
 			"core": {
 				Root: dir,
 				Entries: []config.DirEntry{
@@ -117,7 +120,8 @@ func TestDiffNoDrift(t *testing.T) {
 
 	cfg := &config.Config{
 		Version: config.Version,
-		Dirs: map[string]config.DirCategory{
+		System:  config.System{Hooks: config.Hooks{}},
+		Directory: map[string]config.DirCategory{
 			"core": {
 				Root: dir,
 				Entries: []config.DirEntry{
@@ -138,7 +142,8 @@ func TestDiffFileInsteadOfDir(t *testing.T) {
 
 	cfg := &config.Config{
 		Version: config.Version,
-		Dirs: map[string]config.DirCategory{
+		System:  config.System{Hooks: config.Hooks{}},
+		Directory: map[string]config.DirCategory{
 			"core": {
 				Root: dir,
 				Entries: []config.DirEntry{
@@ -163,7 +168,8 @@ func TestDiffSymlinkMissing(t *testing.T) {
 
 	cfg := &config.Config{
 		Version: config.Version,
-		Dirs: map[string]config.DirCategory{
+		System:  config.System{Hooks: config.Hooks{}},
+		Directory: map[string]config.DirCategory{
 			"core": {
 				Root:    dir,
 				Entries: []config.DirEntry{},
@@ -193,7 +199,8 @@ func TestDiffSymlinkMismatch(t *testing.T) {
 
 	cfg := &config.Config{
 		Version: config.Version,
-		Dirs: map[string]config.DirCategory{
+		System:  config.System{Hooks: config.Hooks{}},
+		Directory: map[string]config.DirCategory{
 			"core": {
 				Root:    dir,
 				Entries: []config.DirEntry{},
@@ -223,7 +230,8 @@ func TestDiffSymlinkCorrect(t *testing.T) {
 
 	cfg := &config.Config{
 		Version: config.Version,
-		Dirs: map[string]config.DirCategory{
+		System:  config.System{Hooks: config.Hooks{}},
+		Directory: map[string]config.DirCategory{
 			"core": {
 				Root:    dir,
 				Entries: []config.DirEntry{},

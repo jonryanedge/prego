@@ -8,25 +8,43 @@ import (
 )
 
 type ScanEntry struct {
-	Path string
-	Mode uint32
+	Path   string
+	Mode   uint32
+	VCS    string
+	Remote string
 }
 
-func Scan(root string, depth int) ([]ScanEntry, error) {
+type IgnoredEntry struct {
+	Path    string
+	Pattern string
+	Source  string
+}
+
+type ScanResult struct {
+	Entries []ScanEntry
+	Ignored []IgnoredEntry
+}
+
+func Scan(root string, depth int) (*ScanResult, error) {
 	expanded := config.ExpandPath(root)
 
-	info, err := os.Stat(expanded)
+	abs, err := filepath.Abs(expanded)
+	if err != nil {
+		return nil, err
+	}
+
+	info, err := os.Stat(abs)
 	if err != nil {
 		return nil, err
 	}
 	if !info.IsDir() {
-		return nil, nil
+		return &ScanResult{}, nil
 	}
 
-	var entries []ScanEntry
-	seen := make(map[string]bool)
+	result := &ScanResult{}
+	var rules []ignoreRule
 
-	err = filepath.WalkDir(expanded, func(path string, d os.DirEntry, walkErr error) error {
+	err = filepath.WalkDir(abs, func(path string, d os.DirEntry, walkErr error) error {
 		if walkErr != nil {
 			return nil
 		}
@@ -35,41 +53,69 @@ func Scan(root string, depth int) ([]ScanEntry, error) {
 			return nil
 		}
 
-		rel, err := filepath.Rel(expanded, path)
+		rel, err := filepath.Rel(abs, path)
 		if err != nil {
 			return nil
 		}
 
 		if rel == "." {
-			return nil
-		}
-
-		if depth > 0 {
-			d := pathDepth(rel)
-			if d > depth {
-				return nil
+			patterns := loadNosauceRules(path)
+			if patterns != nil {
+				rules = append(rules, ignoreRule{dir: path, patterns: patterns})
 			}
-		}
-
-		abs := filepath.Join(expanded, rel)
-		if seen[abs] {
 			return nil
 		}
-		seen[abs] = true
+
+		basename := filepath.Base(path)
+		if basename == ".git" || basename == NosauceFile {
+			if basename == ".git" {
+				return filepath.SkipDir
+			}
+			return nil
+		}
+
+		if matched, pattern := matchIgnoreRule(path, true, rules); matched {
+			result.Ignored = append(result.Ignored, IgnoredEntry{
+				Path:    path,
+				Pattern: pattern,
+				Source:  NosauceFile,
+			})
+			return filepath.SkipDir
+		}
+
+		patterns := loadNosauceRules(path)
+		if patterns != nil {
+			rules = append(rules, ignoreRule{dir: path, patterns: patterns})
+		}
 
 		fi, err := d.Info()
 		if err != nil {
 			return nil
 		}
 
-		entries = append(entries, ScanEntry{
-			Path: abs,
+		entry := ScanEntry{
+			Path: path,
 			Mode: uint32(fi.Mode().Perm()),
-		})
+		}
+
+		if IsGitRepo(path) {
+			entry.VCS = "git"
+			entry.Remote = GitRemoteURL(path)
+			result.Entries = append(result.Entries, entry)
+			return filepath.SkipDir
+		}
+
+		if depth > 0 {
+			if pathDepth(rel) > depth {
+				return filepath.SkipDir
+			}
+		}
+
+		result.Entries = append(result.Entries, entry)
 		return nil
 	})
 
-	return entries, err
+	return result, err
 }
 
 func pathDepth(rel string) int {

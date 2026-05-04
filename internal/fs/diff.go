@@ -28,9 +28,10 @@ type Drift struct {
 func Diff(cfg *config.Config) []Drift {
 	var drifts []Drift
 
-	for cat, dirCat := range cfg.Dirs {
+	for cat, dirCat := range cfg.Directory {
+		resolvedRoot := config.ResolveRoot(dirCat.Root)
 		for _, entry := range dirCat.Entries {
-			expanded := config.ExpandPath(entry.Path)
+			expanded := config.ResolveEntryPath(entry.Path, resolvedRoot)
 			info, err := os.Stat(expanded)
 			if err != nil {
 				if os.IsNotExist(err) {

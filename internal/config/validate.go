@@ -17,16 +17,18 @@ func Validate(cfg *Config) error {
 		return fmt.Errorf("unsupported config version: %d (expected %d)", cfg.Version, Version)
 	}
 
-	if len(cfg.Dirs) == 0 {
+	if len(cfg.Directory) == 0 {
 		return fmt.Errorf("no directory categories defined")
 	}
 
 	seenPaths := make(map[string]string)
 
-	for cat, dirCat := range cfg.Dirs {
+	for cat, dirCat := range cfg.Directory {
 		if dirCat.Root == "" {
 			return fmt.Errorf("category %q: root is required", cat)
 		}
+
+		resolvedRoot := ResolveRoot(dirCat.Root)
 
 		for _, entry := range dirCat.Entries {
 			if entry.Path == "" {
@@ -34,14 +36,16 @@ func Validate(cfg *Config) error {
 			}
 
 			if !strings.HasPrefix(entry.Path, "/") && !strings.HasPrefix(entry.Path, "~/") {
-				return fmt.Errorf("category %q: path %q must be absolute or start with ~/", cat, entry.Path)
+				if strings.HasPrefix(entry.Path, "..") {
+					return fmt.Errorf("category %q: path %q must not escape the root", cat, entry.Path)
+				}
 			}
 
 			if entry.Mode != 0 && entry.Mode > 0777 {
 				return fmt.Errorf("category %q: path %q has invalid mode %04o", cat, entry.Path, entry.Mode)
 			}
 
-			expanded := ExpandPath(entry.Path)
+			expanded := ResolveEntryPath(entry.Path, resolvedRoot)
 			norm := filepath.Clean(expanded)
 			if prev, exists := seenPaths[norm]; exists {
 				return fmt.Errorf("duplicate path %q in categories %q and %q", entry.Path, prev, cat)
@@ -59,9 +63,9 @@ func Validate(cfg *Config) error {
 		}
 	}
 
-	for _, cmd := range cfg.Hooks.PostCreate {
+	for _, cmd := range cfg.System.Hooks.PostCreate {
 		if strings.TrimSpace(cmd) == "" {
-			return fmt.Errorf("hooks.post_create contains empty command")
+			return fmt.Errorf("system.hooks.post_create contains empty command")
 		}
 	}
 

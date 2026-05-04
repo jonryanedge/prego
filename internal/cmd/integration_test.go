@@ -22,8 +22,12 @@ func writeTestConfig(t *testing.T, dir string) string {
 
 	cfg := &config.Config{
 		Version: config.Version,
-		Machine: config.Machine{Name: "test", OS: "darwin"},
-		Dirs: map[string]config.DirCategory{
+		General: config.General{Color: true},
+		System: config.System{
+			Machine: config.Machine{Name: "test", OS: "darwin"},
+			Hooks:   config.Hooks{},
+		},
+		Directory: map[string]config.DirCategory{
 			"core": {
 				Root: "~",
 				Entries: []config.DirEntry{
@@ -42,7 +46,6 @@ func writeTestConfig(t *testing.T, dir string) string {
 				},
 			},
 		},
-		Hooks: config.Hooks{},
 	}
 
 	err := config.Save(cfgPath, cfg)
@@ -158,7 +161,8 @@ func TestDiffDetectsModeMismatch(t *testing.T) {
 
 	cfg := &config.Config{
 		Version: config.Version,
-		Dirs: map[string]config.DirCategory{
+		General: config.General{Color: true},
+		Directory: map[string]config.DirCategory{
 			"core": {
 				Root: dir,
 				Entries: []config.DirEntry{
@@ -197,7 +201,8 @@ func TestScanWithCategory(t *testing.T) {
 	cfgPath := filepath.Join(dir, ".pregorc.yml")
 	cfg := &config.Config{
 		Version: config.Version,
-		Dirs: map[string]config.DirCategory{
+		General: config.General{Color: true},
+		Directory: map[string]config.DirCategory{
 			"documents": {
 				Root:    filepath.Join(dir, "docs"),
 				Entries: []config.DirEntry{},
@@ -232,9 +237,9 @@ func TestScanWriteToNewConfig(t *testing.T) {
 	require.NoError(t, err)
 	require.NoError(t, config.Validate(cfg))
 
-	assert.Contains(t, cfg.Dirs, "repos")
+	assert.Contains(t, cfg.Directory, "repos")
 	found := false
-	for _, e := range cfg.Dirs["repos"].Entries {
+	for _, e := range cfg.Directory["repos"].Entries {
 		if filepath.Base(e.Path) == "personal" {
 			found = true
 		}
@@ -254,14 +259,17 @@ func TestScanWriteMergesExisting(t *testing.T) {
 
 	cfg := &config.Config{
 		Version: config.Version,
-		Machine: config.Machine{Name: "test", OS: "darwin"},
-		Dirs: map[string]config.DirCategory{
+		General: config.General{Color: true},
+		System: config.System{
+			Machine: config.Machine{Name: "test", OS: "darwin"},
+			Hooks:   config.Hooks{},
+		},
+		Directory: map[string]config.DirCategory{
 			"repos": {
 				Root:    dir,
 				Entries: []config.DirEntry{{Path: personalPath, Mode: 0755}},
 			},
 		},
-		Hooks: config.Hooks{},
 	}
 	require.NoError(t, config.Save(cfgPath, cfg))
 
@@ -274,7 +282,7 @@ func TestScanWriteMergesExisting(t *testing.T) {
 	personalCount := 0
 	hasWork := false
 	hasOss := false
-	for _, e := range loaded.Dirs["repos"].Entries {
+	for _, e := range loaded.Directory["repos"].Entries {
 		if e.Path == personalPath {
 			personalCount++
 		}
@@ -307,7 +315,7 @@ func TestScanWriteNoDuplicates(t *testing.T) {
 	loaded, err := config.Load(cfgPath)
 	require.NoError(t, err)
 	count := 0
-	for _, e := range loaded.Dirs["repos"].Entries {
+	for _, e := range loaded.Directory["repos"].Entries {
 		if filepath.Base(e.Path) == "personal" {
 			count++
 		}
@@ -355,7 +363,7 @@ func TestScanWriteDetectsGitRepo(t *testing.T) {
 	require.NoError(t, err)
 
 	found := false
-	for _, e := range cfg.Dirs["repos"].Entries {
+	for _, e := range cfg.Directory["repos"].Entries {
 		if filepath.Base(e.Path) == "my-repo" {
 			assert.Equal(t, "git", e.VCS)
 			assert.Equal(t, "https://github.com/user/repo.git", e.Remote)
@@ -387,7 +395,7 @@ func TestScanWriteGitRepoNoRemote(t *testing.T) {
 	require.NoError(t, err)
 
 	found := false
-	for _, e := range cfg.Dirs["repos"].Entries {
+	for _, e := range cfg.Directory["repos"].Entries {
 		if filepath.Base(e.Path) == "bare-repo" {
 			assert.Equal(t, "git", e.VCS)
 			assert.Empty(t, e.Remote, "repo with no remote should have empty remote")
@@ -426,8 +434,12 @@ func TestBuildCreatesDirsAndClones(t *testing.T) {
 	cfgPath := filepath.Join(dir, ".pregorc.yml")
 	cfg := &config.Config{
 		Version: config.Version,
-		Machine: config.Machine{Name: "test", OS: "darwin"},
-		Dirs: map[string]config.DirCategory{
+		General: config.General{Color: true},
+		System: config.System{
+			Machine: config.Machine{Name: "test", OS: "darwin"},
+			Hooks:   config.Hooks{},
+		},
+		Directory: map[string]config.DirCategory{
 			"core": {
 				Root: dir,
 				Entries: []config.DirEntry{
@@ -441,7 +453,6 @@ func TestBuildCreatesDirsAndClones(t *testing.T) {
 				},
 			},
 		},
-		Hooks: config.Hooks{},
 	}
 	require.NoError(t, config.Save(cfgPath, cfg))
 
@@ -460,8 +471,12 @@ func TestBuildDryRun(t *testing.T) {
 
 	cfg := &config.Config{
 		Version: config.Version,
-		Machine: config.Machine{Name: "test", OS: "darwin"},
-		Dirs: map[string]config.DirCategory{
+		General: config.General{Color: true},
+		System: config.System{
+			Machine: config.Machine{Name: "test", OS: "darwin"},
+			Hooks:   config.Hooks{},
+		},
+		Directory: map[string]config.DirCategory{
 			"core": {
 				Root: dir,
 				Entries: []config.DirEntry{
@@ -469,7 +484,6 @@ func TestBuildDryRun(t *testing.T) {
 				},
 			},
 		},
-		Hooks: config.Hooks{},
 	}
 	require.NoError(t, config.Save(cfgPath, cfg))
 
@@ -498,14 +512,17 @@ func TestBuildSkipsExistingRepo(t *testing.T) {
 	cfgPath := filepath.Join(dir, ".pregorc.yml")
 	cfg := &config.Config{
 		Version: config.Version,
-		Machine: config.Machine{Name: "test", OS: "darwin"},
-		Dirs: map[string]config.DirCategory{
+		General: config.General{Color: true},
+		System: config.System{
+			Machine: config.Machine{Name: "test", OS: "darwin"},
+			Hooks:   config.Hooks{},
+		},
+		Directory: map[string]config.DirCategory{
 			"repos": {
 				Root:    filepath.Join(dir, "repos"),
 				Entries: []config.DirEntry{{Path: repoDir, Mode: 0755, VCS: "git", Remote: "https://example.com/repo.git"}},
 			},
 		},
-		Hooks: config.Hooks{},
 	}
 	require.NoError(t, config.Save(cfgPath, cfg))
 
@@ -513,4 +530,158 @@ func TestBuildSkipsExistingRepo(t *testing.T) {
 	require.NoError(t, rootCmd.Execute())
 
 	assert.True(t, fs.IsGitRepo(repoDir), "existing git repo should remain intact")
+}
+
+func TestScanWriteUpdatesRootOnExistingCategory(t *testing.T) {
+	resetFlags()
+	dir := t.TempDir()
+
+	require.NoError(t, os.MkdirAll(filepath.Join(dir, "repos", "project1"), 0755))
+	require.NoError(t, os.MkdirAll(filepath.Join(dir, "repos", "project2"), 0755))
+
+	cfgPath := filepath.Join(dir, ".pregorc.yml")
+	cfg := &config.Config{
+		Version: config.Version,
+		General: config.General{Color: true},
+		System: config.System{
+			Machine: config.Machine{Name: "test", OS: "darwin"},
+			Hooks:   config.Hooks{},
+		},
+		Directory: map[string]config.DirCategory{
+			"repos": {
+				Root:    "~/repos",
+				Entries: []config.DirEntry{},
+			},
+		},
+	}
+	require.NoError(t, config.Save(cfgPath, cfg))
+
+	reposDir := filepath.Join(dir, "repos")
+	rootCmd.SetArgs([]string{"-c", cfgPath, "scan", reposDir, "--category", "repos", "--write"})
+	require.NoError(t, rootCmd.Execute())
+
+	loaded, err := config.Load(cfgPath)
+	require.NoError(t, err)
+
+	assert.Equal(t, config.ContractPath(reposDir), loaded.Directory["repos"].Root, "Root should be updated to scan root")
+	assert.Equal(t, 2, len(loaded.Directory["repos"].Entries), "should have 2 entries")
+
+	for _, e := range loaded.Directory["repos"].Entries {
+		expected := config.ContractPath(config.ExpandPath(e.Path))
+		assert.Equal(t, expected, e.Path, "entry path should be in ~/ notation when under home, absolute otherwise")
+	}
+}
+
+func TestScanWriteNewCategorySetsRoot(t *testing.T) {
+	resetFlags()
+	dir := t.TempDir()
+
+	require.NoError(t, os.MkdirAll(filepath.Join(dir, "mydir", "sub1"), 0755))
+
+	cfgPath := filepath.Join(dir, ".pregorc.yml")
+
+	rootCmd.SetArgs([]string{"-c", cfgPath, "scan", dir, "--category", "custom", "--write"})
+	require.NoError(t, rootCmd.Execute())
+
+	loaded, err := config.Load(cfgPath)
+	require.NoError(t, err)
+
+	assert.Contains(t, loaded.Directory, "custom")
+	assert.Equal(t, config.ContractPath(dir), loaded.Directory["custom"].Root)
+}
+
+func TestScanWritePathsUnderHomeUseTilde(t *testing.T) {
+	resetFlags()
+	home, err := os.UserHomeDir()
+	require.NoError(t, err)
+
+	testDir := filepath.Join(home, ".prego_test_scan_tilde")
+	require.NoError(t, os.MkdirAll(filepath.Join(testDir, "sub1"), 0755))
+	defer os.RemoveAll(testDir)
+
+	cfgPath := filepath.Join(testDir, ".pregorc.yml")
+
+	rootCmd.SetArgs([]string{"-c", cfgPath, "scan", testDir, "--category", "core", "--write"})
+	require.NoError(t, rootCmd.Execute())
+
+	loaded, err := config.Load(cfgPath)
+	require.NoError(t, err)
+
+	for _, e := range loaded.Directory["core"].Entries {
+		assert.Contains(t, e.Path, "~/", "entry path under home should use ~/ notation")
+	}
+}
+
+func TestScanLocalOverwritesCategory(t *testing.T) {
+	resetFlags()
+	dir := t.TempDir()
+
+	require.NoError(t, os.MkdirAll(filepath.Join(dir, "new1"), 0755))
+	require.NoError(t, os.MkdirAll(filepath.Join(dir, "new2"), 0755))
+
+	origDir, err := os.Getwd()
+	require.NoError(t, err)
+	require.NoError(t, os.Chdir(dir))
+	defer os.Chdir(origDir)
+
+	rootCmd.SetArgs([]string{"scan", ".", "--local", "--write"})
+	require.NoError(t, rootCmd.Execute())
+
+	loaded, err := config.Load(config.LocalConfigName)
+	require.NoError(t, err)
+
+	assert.Equal(t, ".", loaded.Directory["repos"].Root, "local config should use root: .")
+
+	for _, e := range loaded.Directory["repos"].Entries {
+		assert.NotContains(t, e.Path, "~", "local entry paths should not use ~/")
+		assert.False(t, filepath.IsAbs(e.Path), "local entry paths should be relative, not absolute: %s", e.Path)
+	}
+	assert.Equal(t, 2, len(loaded.Directory["repos"].Entries), "should have exactly 2 new entries")
+
+	resolvedRoot := config.ResolveRoot(loaded.Directory["repos"].Root)
+	for _, e := range loaded.Directory["repos"].Entries {
+		resolved := config.ResolveEntryPath(e.Path, resolvedRoot)
+		assert.DirExists(t, resolved, "resolved path should point to real directory")
+	}
+}
+
+func TestScanSystemMergeKeepsExisting(t *testing.T) {
+	resetFlags()
+	dir := t.TempDir()
+
+	require.NoError(t, os.MkdirAll(filepath.Join(dir, "repos", "new1"), 0755))
+
+	cfgPath := filepath.Join(dir, ".pregorc.yml")
+	existingPath := config.ContractPath(filepath.Join(dir, "repos", "old-stale"))
+	cfg := &config.Config{
+		Version: config.Version,
+		General: config.General{Color: true},
+		System: config.System{
+			Machine: config.Machine{Name: "test", OS: "darwin"},
+			Hooks:   config.Hooks{},
+		},
+		Directory: map[string]config.DirCategory{
+			"repos": {
+				Root:    "~/repos",
+				Entries: []config.DirEntry{{Path: existingPath, Mode: 0755}},
+			},
+		},
+	}
+	require.NoError(t, config.Save(cfgPath, cfg))
+
+	reposDir := filepath.Join(dir, "repos")
+	rootCmd.SetArgs([]string{"-c", cfgPath, "scan", reposDir, "--category", "repos", "--write"})
+	require.NoError(t, rootCmd.Execute())
+
+	loaded, err := config.Load(cfgPath)
+	require.NoError(t, err)
+
+	found := false
+	for _, e := range loaded.Directory["repos"].Entries {
+		if e.Path == existingPath {
+			found = true
+		}
+	}
+	assert.True(t, found, "system --write should merge, keeping existing entries")
+	assert.Equal(t, 2, len(loaded.Directory["repos"].Entries), "should have 1 old + 1 new entry")
 }

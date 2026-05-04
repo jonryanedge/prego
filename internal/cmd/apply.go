@@ -19,7 +19,7 @@ var applyCmd = &cobra.Command{
 don't already exist. Respects declared permissions and symlink targets.
 Idempotent: safe to run multiple times.`,
 	RunE: func(cmd *cobra.Command, args []string) error {
-		cfg, err := config.Load(cfgPath)
+		cfg, err := config.DiscoverConfig(cfgPath)
 		if err != nil {
 			return fmt.Errorf("failed to load config: %w", err)
 		}
@@ -29,9 +29,10 @@ Idempotent: safe to run multiple times.`,
 
 		var created, skipped, linked int
 
-		for cat, dirCat := range cfg.Dirs {
+		for cat, dirCat := range cfg.Directory {
+			resolvedRoot := config.ResolveRoot(dirCat.Root)
 			for _, entry := range dirCat.Entries {
-				expanded := config.ExpandPath(entry.Path)
+				expanded := config.ResolveEntryPath(entry.Path, resolvedRoot)
 				mode := entry.Mode
 				if mode == 0 {
 					mode = 0755
@@ -82,8 +83,8 @@ Idempotent: safe to run multiple times.`,
 			}
 		}
 
-		if len(cfg.Hooks.PostCreate) > 0 {
-			for _, hook := range cfg.Hooks.PostCreate {
+		if len(cfg.System.Hooks.PostCreate) > 0 {
+			for _, hook := range cfg.System.Hooks.PostCreate {
 				if applyDryRun {
 					cmd.Printf("[dry-run] would run: %s\n", hook)
 					continue
@@ -114,5 +115,7 @@ func resetFlags() {
 	scanDepth = 0
 	scanCategory = ""
 	scanWrite = false
+	scanLocal = false
+	initLocal = false
 	cfgPath = "~/.pregorc.yml"
 }

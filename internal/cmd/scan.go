@@ -16,6 +16,7 @@ var (
 	scanDepth    int
 	scanCategory string
 	scanWrite    bool
+	scanLocal    bool
 )
 
 var scanCmd = &cobra.Command{
@@ -26,15 +27,27 @@ from the config) and output discovered entries.
 
 By default, scan prints results to stdout and does not modify any files.
 Use --write to merge scanned entries into the config file specified by -c.
-Git repositories are automatically detected and their remote URLs captured.
+Use --local with --write to save to .pregorc.yml in the current directory.
+Git repositories are automatically detected — scan stops at repo boundaries
+and captures the remote URL. Hidden directories like .git are skipped.
 
 Examples:
-  prego scan ~/repos                      # preview entries
-  prego scan ~/repos -C repos --write     # write entries to config under "repos"
-  prego scan ~/repos -d 2                 # limit depth
-  prego scan -C core                      # scan the root of an existing category`,
+  prego scan .                                # preview entries in current dir
+  prego scan . --write --local               # write to local .pregorc.yml
+  prego scan ~/repos -C repos --write         # write entries to system config
+  prego scan ~/repos -d 2                     # limit depth
+  prego scan -C core                          # scan the root of an existing category`,
 	Args: cobra.MaximumNArgs(1),
 	RunE: func(cmd *cobra.Command, args []string) error {
+		if scanLocal && !scanWrite {
+			return fmt.Errorf("--local requires --write")
+		}
+
+		writePath := cfgPath
+		if scanLocal {
+			writePath = config.LocalConfigName
+		}
+
 		root := ""
 		if len(args) > 0 {
 			root = args[0]
@@ -45,11 +58,11 @@ Examples:
 		}
 
 		if scanCategory != "" && root == "" {
-			cfg, err := config.Load(cfgPath)
+			cfg, err := config.DiscoverConfig(cfgPath)
 			if err != nil {
 				return fmt.Errorf("failed to load config: %w", err)
 			}
-			cat, ok := cfg.Dirs[scanCategory]
+			cat, ok := cfg.Directory[scanCategory]
 			if !ok {
 				return fmt.Errorf("category %q not found in config", scanCategory)
 			}
@@ -58,25 +71,36 @@ Examples:
 
 		root = config.ExpandPath(root)
 
-		entries, err := fs.Scan(root, scanDepth)
+		absRoot, err := filepath.Abs(root)
+		if err != nil {
+			return fmt.Errorf("failed to resolve path: %w", err)
+		}
+
+		result, err := fs.Scan(absRoot, scanDepth)
 		if err != nil {
 			return fmt.Errorf("scan failed: %w", err)
 		}
 
-		if len(entries) == 0 {
-			cmd.Println("no directories found")
+		for _, ig := range result.Ignored {
+			cmd.Printf("ignored %s (matched %q from %s)\n", ig.Path, ig.Pattern, ig.Source)
+		}
+
+		if len(result.Entries) == 0 {
+			if len(result.Ignored) > 0 {
+				cmd.Println("no directories found (some entries were ignored by .nosauce)")
+			} else {
+				cmd.Println("no directories found")
+			}
 			return nil
 		}
 
-		enrichedEntries := detectVCSDetails(entries)
-
 		if scanWrite {
-			return writeScanEntries(cmd, enrichedEntries, root)
+			return writeScanEntries(cmd, result.Entries, absRoot, writePath)
 		}
 
 		w := tabwriter.NewWriter(cmd.OutOrStdout(), 0, 0, 2, ' ', 0)
 		fmt.Fprintln(w, "PATH\tMODE\tVCS\tREMOTE")
-		for _, e := range enrichedEntries {
+		for _, e := range result.Entries {
 			fmt.Fprintf(w, "%s\t%04o\t%s\t%s\n", e.Path, e.Mode, e.VCS, e.Remote)
 		}
 		w.Flush()
@@ -84,37 +108,14 @@ Examples:
 	},
 }
 
-type enrichedEntry struct {
-	Path   string
-	Mode   uint32
-	VCS    string
-	Remote string
-}
-
-func detectVCSDetails(entries []fs.ScanEntry) []enrichedEntry {
-	result := make([]enrichedEntry, len(entries))
-	for i, e := range entries {
-		result[i] = enrichedEntry{
-			Path: e.Path,
-			Mode: e.Mode,
-		}
-		vcs, remote := fs.DetectVCS(e.Path)
-		if vcs != "" {
-			result[i].VCS = vcs
-			result[i].Remote = remote
-		}
-	}
-	return result
-}
-
-func writeScanEntries(cmd *cobra.Command, entries []enrichedEntry, root string) error {
+func writeScanEntries(cmd *cobra.Command, entries []fs.ScanEntry, absRoot string, writePath string) error {
 	category := scanCategory
 	if category == "" {
 		category = "repos"
 	}
 
 	var cfg *Config
-	cfg, err := config.Load(cfgPath)
+	cfg, err := config.Load(writePath)
 	if err != nil {
 		if !os.IsNotExist(err) {
 			return fmt.Errorf("failed to load config: %w", err)
@@ -122,41 +123,47 @@ func writeScanEntries(cmd *cobra.Command, entries []enrichedEntry, root string) 
 		hostname, _ := os.Hostname()
 		cfg = &config.Config{
 			Version: config.Version,
-			Machine: config.Machine{
-				Name: hostname,
-				OS:   runtime.GOOS,
+			General: config.General{Color: true},
+			System: config.System{
+				Machine: config.Machine{Name: hostname, OS: runtime.GOOS},
+				Hooks:   config.Hooks{},
 			},
-			Dirs:  map[string]config.DirCategory{},
-			Hooks: config.Hooks{},
+			Directory: map[string]config.DirCategory{},
 		}
 	}
 
-	cat, exists := cfg.Dirs[category]
-	if !exists {
-		cat = config.DirCategory{
-			Root:    root,
-			Entries: []config.DirEntry{},
-		}
+	cat := config.DirCategory{
+		Root:    config.ContractPath(absRoot),
+		Entries: []config.DirEntry{},
 	}
 
-	existing := make(map[string]bool)
+	if !scanLocal {
+		if existing, ok := cfg.Directory[category]; ok {
+			cat = existing
+			cat.Root = config.ContractPath(absRoot)
+		}
+	} else {
+		cat.Root = "."
+	}
+
+	seen := make(map[string]bool)
 	for _, e := range cat.Entries {
-		existing[config.ExpandPath(e.Path)] = true
+		seen[config.ResolveEntryPath(e.Path, config.ResolveRoot(cat.Root))] = true
 	}
 
 	added := 0
 	for _, entry := range entries {
-		rel, err := filepath.Rel(root, entry.Path)
+		absPath := entry.Path
+		rel, err := filepath.Rel(absRoot, entry.Path)
 		if err != nil {
 			rel = entry.Path
 		}
-
-		absPath := entry.Path
 		if absPath == rel || rel == "." {
 			continue
 		}
 
-		if existing[absPath] {
+		resolved := config.ResolveEntryPath(rel, config.ResolveRoot(cat.Root))
+		if seen[resolved] {
 			continue
 		}
 
@@ -166,28 +173,37 @@ func writeScanEntries(cmd *cobra.Command, entries []enrichedEntry, root string) 
 		}
 
 		dirEntry := config.DirEntry{
-			Path:   absPath,
+			Path:   rel,
 			Mode:   mode,
 			VCS:    entry.VCS,
 			Remote: entry.Remote,
 		}
 
+		if !scanLocal {
+			dirEntry.Path = config.ContractPath(absPath)
+		}
+
 		cat.Entries = append(cat.Entries, dirEntry)
-		existing[absPath] = true
+		resolved2 := config.ResolveEntryPath(dirEntry.Path, config.ResolveRoot(cat.Root))
+		seen[resolved2] = true
 		added++
 	}
 
-	cfg.Dirs[category] = cat
+	cfg.Directory[category] = cat
 
 	if err := config.Validate(cfg); err != nil {
-		return fmt.Errorf("config validation failed after adding entries: %w", err)
+		return fmt.Errorf("config validation failed: %w", err)
 	}
 
-	if err := config.Save(cfgPath, cfg); err != nil {
+	if err := config.Save(writePath, cfg); err != nil {
 		return fmt.Errorf("failed to save config: %w", err)
 	}
 
-	cmd.Printf("added %d entries to category %q in %s\n", added, category, cfgPath)
+	if scanLocal {
+		cmd.Printf("wrote %d entries to category %q in %s\n", added, category, writePath)
+	} else {
+		cmd.Printf("added %d entries to category %q in %s\n", added, category, writePath)
+	}
 	return nil
 }
 
@@ -197,5 +213,6 @@ func init() {
 	scanCmd.Flags().IntVarP(&scanDepth, "depth", "d", 0, "max traversal depth (0 = unlimited)")
 	scanCmd.Flags().StringVarP(&scanCategory, "category", "C", "", "config category to scan/write into (core/documents/repos)")
 	scanCmd.Flags().BoolVar(&scanWrite, "write", false, "write scanned entries into the config file")
+	scanCmd.Flags().BoolVar(&scanLocal, "local", false, "write to .pregorc.yml in current directory (requires --write)")
 	rootCmd.AddCommand(scanCmd)
 }

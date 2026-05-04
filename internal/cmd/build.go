@@ -21,7 +21,7 @@ and then clone any git repos that have a remote URL but don't exist yet.
 Idempotent: safe to run multiple times. Existing directories and repos
 are skipped.`,
 	RunE: func(cmd *cobra.Command, args []string) error {
-		cfg, err := config.Load(cfgPath)
+		cfg, err := config.DiscoverConfig(cfgPath)
 		if err != nil {
 			return fmt.Errorf("failed to load config: %w", err)
 		}
@@ -32,9 +32,10 @@ are skipped.`,
 		var created, skipped, linked int
 		var cloned []string
 
-		for cat, dirCat := range cfg.Dirs {
+		for cat, dirCat := range cfg.Directory {
+			resolvedRoot := config.ResolveRoot(dirCat.Root)
 			for _, entry := range dirCat.Entries {
-				expanded := config.ExpandPath(entry.Path)
+				expanded := config.ResolveEntryPath(entry.Path, resolvedRoot)
 				mode := entry.Mode
 				if mode == 0 {
 					mode = 0755
@@ -85,13 +86,14 @@ are skipped.`,
 			}
 		}
 
-		for cat, dirCat := range cfg.Dirs {
+		for _, dirCat := range cfg.Directory {
+			resolvedRoot := config.ResolveRoot(dirCat.Root)
 			for _, entry := range dirCat.Entries {
 				if entry.VCS != "git" || entry.Remote == "" {
 					continue
 				}
 
-				expanded := config.ExpandPath(entry.Path)
+				expanded := config.ResolveEntryPath(entry.Path, resolvedRoot)
 
 				if buildDryRun {
 					cmd.Printf("[dry-run] would clone %s into %s\n", entry.Remote, expanded)
@@ -145,20 +147,19 @@ are skipped.`,
 				cmd.Printf("cloned %s into %s\n", cloneURL, expanded)
 				cloned = append(cloned, cloneURL)
 			}
+		}
 
-			if len(cfg.Hooks.PostCreate) > 0 {
-				for _, hook := range cfg.Hooks.PostCreate {
-					if buildDryRun {
-						cmd.Printf("[dry-run] would run: %s\n", hook)
-						continue
-					}
-					cmd.Printf("hook  %s\n", hook)
-					if err := exec.Command("sh", "-c", hook).Run(); err != nil {
-						cmd.Printf("hook failed: %v\n", err)
-					}
+		if len(cfg.System.Hooks.PostCreate) > 0 {
+			for _, hook := range cfg.System.Hooks.PostCreate {
+				if buildDryRun {
+					cmd.Printf("[dry-run] would run: %s\n", hook)
+					continue
+				}
+				cmd.Printf("hook  %s\n", hook)
+				if err := exec.Command("sh", "-c", hook).Run(); err != nil {
+					cmd.Printf("hook failed: %v\n", err)
 				}
 			}
-			_ = cat
 		}
 
 		if !buildDryRun {

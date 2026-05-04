@@ -18,7 +18,7 @@ var diffCmd = &cobra.Command{
 Reports missing directories, extra files, permission mismatches, and
 symlink drift. Exit code 0 if no drift, 1 if drift found.`,
 	RunE: func(cmd *cobra.Command, args []string) error {
-		cfg, err := config.Load(cfgPath)
+		cfg, err := config.DiscoverConfig(cfgPath)
 		if err != nil {
 			return fmt.Errorf("failed to load config: %w", err)
 		}

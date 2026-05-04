@@ -12,7 +12,7 @@ var checkCmd = &cobra.Command{
 	Short: "Validate the config file",
 	Long:  `Parse and validate the prego config file. Reports any errors in structure, paths, or fields.`,
 	RunE: func(cmd *cobra.Command, args []string) error {
-		cfg, err := config.Load(cfgPath)
+		cfg, err := config.DiscoverConfig(cfgPath)
 		if err != nil {
 			return fmt.Errorf("failed to load config: %w", err)
 		}
